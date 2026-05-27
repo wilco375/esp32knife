@@ -311,11 +311,15 @@ def parse_nvs_partition(partfilename):
     flog = open(logfilename, "wt")
     with open(partfilename, 'rb') as fh:
         std=sys.stdout
-        if flog: 
-            sys.stdout = flog
-        #pages = esp32nvs.read_nvs_pages(fh,True)
-        pages = esp32nvs.nvs2csv(fh, NVS_BLOB_DATA_DIR)
-        sys.stdout = std
+        try:
+            if flog: 
+                sys.stdout = flog
+            pages = esp32nvs.nvs2csv(fh, NVS_BLOB_DATA_DIR)
+        except Exception as inst:
+            printlog("      Failed to generate csv: {}".format(inst))
+        finally:
+            sys.stdout = std
+            flog.close()
 
     #text
     logfilename=partfilename+".txt"
@@ -323,18 +327,28 @@ def parse_nvs_partition(partfilename):
     flog = open(logfilename, "wt")
     with open(partfilename, 'rb') as fh:
         std=sys.stdout
-        if flog: 
-            sys.stdout = flog
-        pages = esp32nvs.nvs2txt(fh)
-        sys.stdout = std
+        try:
+            if flog: 
+                sys.stdout = flog
+            pages = esp32nvs.nvs2txt(fh)
+        except Exception as inst:
+            printlog("      Failed to generate txt: {}".format(inst))
+        finally:
+            sys.stdout = std
+            flog.close()
 
     #json
     logfilename=partfilename+".json"
     printlog("      Parsing NVS partition: {} to {}".format(partfilename, logfilename))
+    std=sys.stdout
     with open(partfilename, 'rb') as fh:
-        sys.stdout = open(os.devnull, 'w') # block print()
-        pages = esp32nvs.nvs2txt(fh)
-        sys.stdout = sys.stdout = sys.__stdout__ # re-enable print()
+        try:
+            sys.stdout = open(os.devnull, 'w') # block print()
+            pages = esp32nvs.nvs2txt(fh)
+        except Exception as inst:
+            pages = {}
+        finally:
+            sys.stdout = std
         with open(logfilename, "wt") as f:
             f.writelines(json.dumps(pages, indent=4))
             
@@ -1079,7 +1093,10 @@ def main():
             with open(fname, "wb") as f:
                 f.write( FIRMWARE_FULL_BIN[ p.offset: p.offset+p.size] )
             if p.type == esp32part.DATA_TYPE and p.subtype == esp32part.SUBTYPES[esp32part.DATA_TYPE]['nvs']:
-                parse_nvs_partition(fname)
+                try:
+                    parse_nvs_partition(fname)
+                except Exception as inst:
+                    printlog("      Failed to parse NVS partition: {}".format(inst))
 
 
         printlog("\nAPP PARTITIONS INFO:")

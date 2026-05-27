@@ -58,8 +58,8 @@ def dump_nvs_entries(entries, entry_state_bitmap, fpos):
     while i < 126:
         entry_data = {}
         print("  Entry {} (offset = {:08x})".format(i,fpos+i*32))
-        print("  Bitmap State : %s" % (entry_state_descs[int(entry_state_bitmap[i])]))
-        entry_data["entry_state"] = entry_state_descs[int(entry_state_bitmap[i])]
+        print("  Bitmap State : %s" % (entry_state_descs.get(int(entry_state_bitmap[i]), "Unknown")))
+        entry_data["entry_state"] = entry_state_descs.get(int(entry_state_bitmap[i]), "Unknown")
 
         entry = entries[i]
         state = entry_state_bitmap[i]
@@ -72,7 +72,7 @@ def dump_nvs_entries(entries, entry_state_bitmap, fpos):
         key = entry[8:24]
 
         data = entry[24:]
-        if(entry_type == 0):
+        if entry_type not in nvs_types:
             i += 1
             continue
 
@@ -105,6 +105,9 @@ def dump_nvs_entries(entries, entry_state_bitmap, fpos):
         entry_data["entry_chunk_index"] = chunk_index
         entry_data["entry_key"] = key
 
+        if i + entry_span > len(entries):
+            i += 1
+            continue
 
         if(nvs_types[entry_type] == "U8"):
             data = struct.unpack("<B", data[0:1])[0]
@@ -169,7 +172,7 @@ def dump_nvs_entries(entries, entry_state_bitmap, fpos):
             for x in range(1, entry_span):
                 i += 1
                 data += entries[i]
-            data = data[0:str_size-1].decode('ascii')
+            data = data[0:str_size-1].decode('ascii', errors='replace')
             print("        Data : %s" % (data))
             entry_data["entry_data"] = str(data)
 
@@ -238,7 +241,8 @@ def nvs2txt(fh):
         ofs_page = fh.tell()
 
         raw_page_state = fh.read(4)
-        page_state = nvs_sector_states[struct.unpack("<I", raw_page_state)[0]]
+        raw_page_state_val = struct.unpack("<I", raw_page_state)[0]
+        page_state = nvs_sector_states.get(raw_page_state_val, "UNKNOWN(0x{:08X})".format(raw_page_state_val))
 
         raw_seq_no = fh.read(4)
         seq_no = struct.unpack("<I", raw_seq_no)[0]
@@ -304,7 +308,7 @@ def parse_nvs_entries(entries, entry_state_bitmap):
     i = 0
     while i < 126:
         entry_data = {}
-        entry_data["entry_state"] = entry_state_descs[int(entry_state_bitmap[i])]
+        entry_data["entry_state"] = entry_state_descs.get(int(entry_state_bitmap[i]), "Unknown")
 
         entry = entries[i]
         state = entry_state_bitmap[i]
@@ -317,7 +321,7 @@ def parse_nvs_entries(entries, entry_state_bitmap):
         key = entry[8:24]
 
         data = entry[24:]
-        if(entry_type == 0):
+        if entry_type not in nvs_types:
             i += 1
             continue
 
@@ -340,6 +344,10 @@ def parse_nvs_entries(entries, entry_state_bitmap):
         entry_data["entry_span"] = entry_span
         entry_data["entry_chunk_index"] = chunk_index
         entry_data["entry_key"] = key
+
+        if i + entry_span > len(entries):
+            i += 1
+            continue
 
         if(nvs_types[entry_type] == "U8"):
             data = struct.unpack("<B", data[0:1])[0]
@@ -391,7 +399,7 @@ def parse_nvs_entries(entries, entry_state_bitmap):
             for x in range(1, entry_span):
                 i += 1
                 data += entries[i]
-            data = data[0:str_size-1].decode('ascii')
+            data = data[0:str_size-1].decode('ascii', errors='replace')
             entry_data["entry_data"] = str(data)
 
         elif(nvs_types[entry_type] == "BLOB_DATA"):
